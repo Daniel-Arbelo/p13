@@ -1,0 +1,13 @@
+{
+    "exclude" : [
+      "test",
+      "./node_modules",
+      "./dist"
+    ],
+    "compilerOptions": {
+      "target": "es2022",
+      "module": "node16",
+      "rootDir": "./src",
+      "outDir": "./dist"
+    }
+}

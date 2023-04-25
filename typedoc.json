@@ -1,0 +1,6 @@
+{
+    "entryPoints": [
+       "./src/p11/FunkoPop.ts"
+    ],
+    "out":"./docs"
+}
