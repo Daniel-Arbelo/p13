@@ -24,7 +24,7 @@ export enum FunkoGenre {
  * Clase para representar a los funkopop
  */
 export class FunkoPop {
-    private _id: string
+    private _myid: string
     private _name: string;
     private _description: string;
     private _type: FunkoType;
@@ -49,7 +49,7 @@ export class FunkoPop {
      * @param marketValue precio del funko en el mercado
      */
     constructor(id: string, name: string, description: string, type: FunkoType, genre: FunkoGenre, franchise: string, number: number, exclusive: boolean, specialFeatures: string, marketValue: number) {
-        this._id = id;
+        this._myid = id;
         this._name = name;
         this._description = description;
         this._type = type;
@@ -65,14 +65,14 @@ export class FunkoPop {
      * getter del id
      */
     get id(): string {
-        return this._id;
+        return this._myid;
     }
   
     /**
      * setter del id
      */
     cambiarid(value: string) {
-        this._id = value;
+        this._myid = value;
     }
   
     /**

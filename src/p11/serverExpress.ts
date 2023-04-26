@@ -4,14 +4,19 @@ import { fileURLToPath } from 'url';
 import {FunkoPop} from "./FunkoPop.js";
 import { brotliDecompressSync } from 'zlib';
 import * as fs from 'fs';
-import { title } from 'process';
+import { resourceUsage, title } from 'process';
 import path from 'path';
 import bodyParser from 'body-parser';
+import { MongoClient } from 'mongodb';
 //import {request} from 'http';
 
 const app = express();
 
 app.use(bodyParser.json());
+
+//MongoDB
+const dbURL = 'mongodb://127.0.0.1:27017';
+const dbName = 'funko-app';
 
 app.get('/list', (req, res) => {
   var user = req.query.user;
@@ -23,34 +28,28 @@ app.get('/list', (req, res) => {
     }
     res.send(JSON.stringify(data));
   }else if(user != undefined){
-    console.log(user);
-    // Recorre los ficheros del usuario 
-    let funkos:FunkoPop[] = [];
     
-    fs.readdir("Funkos/" + user, function(err,archivos) {
-      
-        if(err){
-            res.status(400);
-            let data = {
-              error: "Error al leer el dir"
-            }
-            res.send(JSON.stringify(data));
-        }else{
-          archivos.forEach((archivo) =>{
-            fs.readFile("Funkos/" + user + "/" + archivo, (_, data) => {
-                let funkoJson = JSON.parse(data.toString());
-                funkos.push(funkoJson);
-            })
-          });
-        }
-        
-        
+    // Se buscan todos los ficeros del usuario asasdo
     
-    })
-    setTimeout(() =>{
-      res.status(200);
-      res.send(JSON.stringify(funkos));
-    }, 250);
+    MongoClient.connect(dbURL).then((client) => {
+      const db = client.db(dbName);
+    
+      return db.collection<FunkoPop>(user.toString()).find().toArray();
+    }).then((result) => {
+      if(result.length == 0){
+      res.status(400);
+      let data = {
+        error: "El usuario no tiene funkos creados"
+      }
+      res.send(JSON.stringify(data));
+      }else{
+        res.status(200);
+        res.send(result);
+      }
+    }).catch((error) => {
+      console.log(error);
+    });
+    
     
   }
 });
@@ -68,42 +67,27 @@ app.get('/read', (req, res) => {
     res.send(JSON.stringify(data));
   }else if(user != undefined && id != undefined){
             let idEncontrado:boolean = false;
-            let funko;
             // Recorre los ficheros del usuario imprimiendo los diferentes funkos de este
-            fs.readdir("Funkos/" + user, function(err,archivos) {
-              if(err){
+            MongoClient.connect(dbURL).then((client) => {
+              const db = client.db(dbName);
+            
+              return db.collection<FunkoPop>(user.toString()).find({
+                _myid: 'id-'+id,
+              }).toArray();
+            }).then((result) => {
+              if(result.length == 0){
                 res.status(400);
                 let data = {
-                  error: "Error al leer el dir"
+                  error: "No se ha encontrad e funko"
                 }
                 res.send(JSON.stringify(data));
-              }
-              // Recorrer los archivos
-              archivos.forEach((archivo) =>{
-                fs.readFile("Funkos/" + user + "/" + archivo, (_, data) => {
-                  let funkoJson = JSON.parse(data.toString());
-                  if(funkoJson._id == "id-" + id){
-                    idEncontrado = true;
-                    funko = JSON.parse(data.toString());
-                    
-                  }
-                })
-              });
-              
-            })
-            // Se utiliza setTimeout para evitar que ejecute los condicionales antes que el fs.readfile
-            setTimeout(() => {
-              if(idEncontrado == false){
-                res.status(400);
-                let data = {
-                  error: "Funko no encontrado"
+                }else{
+                  res.status(200);
+                  res.send(result);
                 }
-                res.send(JSON.stringify(data));
-              }else{
-                res.status(200);
-                res.send(JSON.stringify(funko));
-              }
-            }, 200); 
+            }).catch((error) => {
+              console.log(error);
+            });
     
   }
 });
@@ -121,25 +105,21 @@ app.post('/add', (req, res) => {
   }else if(user != undefined){
     //console.log(message);
     let creado = 0;
-    // Se crea el directorio
-    fs.mkdir("Funkos/" + user, (err) => {
-        
-      });
+    // Se crea la base de datos del cliente
+    MongoClient.connect(dbURL).then((client) => {
+      const db = client.db(dbName);
     
-      // Se crea la ruta del fichero y se escribe en formato json la infor del funko
-      let RutayNombreFichero:string =  "Funkos/"+ user + "/" + funko._id + ".json"; 
-      
-      fs.writeFile(RutayNombreFichero,  JSON.stringify(funko), (err) => {
-        if(err){
-          res.status(400);
-          let data = {
-            error: "Error al guardar el funko"
-          }
-          res.send(JSON.stringify(data));
-        }else{
-            creado = 1;
-        }
-      });
+      return db.collection<FunkoPop>(user.toString()).insertOne(funko);
+    }).then((result) => {
+      if(result.acknowledged){
+        creado = 1;
+      }else{
+        creado = 0;
+      }
+    }).catch((error) => {
+      console.log(error);
+    });
+    
       setTimeout(() =>{
         //console.log(creado);
         let response:ResponseType;
@@ -172,33 +152,22 @@ app.delete('/remove', (req, res) => {
     res.send(JSON.stringify(data));
   }else if(user != undefined && id != undefined){
     let idEncontrado:boolean = false;
-    // Recorre los ficheros del usuario imprimiendo los diferentes funkos de este
-    fs.readdir("Funkos/" + user, function(err,archivos) {
-      if(err){
-        res.status(400);
-          let data = {
-            error: "Error al leer el dir"
-          }
-          res.send(JSON.stringify(data));
-      } else{
-        // Recorrer los archivos
-        archivos.forEach((archivo) =>{
-          fs.readFile("Funkos/" + user + "/" + archivo, (_, data) => {
-            let funkoJson = JSON.parse(data.toString());
-            if(funkoJson._id == "id-" + id){
-              idEncontrado = true;
-              fs.rm("Funkos/" + user + "/" + archivo, (err) => {
-                if(err)
-                  idEncontrado = false;
-
-                
-              });
-              
-            }
-          })
-        });
-    }
-    })
+    // eliminar funko de la base de datos
+    MongoClient.connect(dbURL).then((client) => {
+      const db = client.db(dbName);
+    
+      return db.collection<FunkoPop>(user.toString()).deleteOne({
+        _myid: 'id-'+id,
+      });
+    }).then((result) => {
+      if(result.deletedCount == 1){
+        idEncontrado = true;
+      }else{
+        idEncontrado=false;
+      }
+    }).catch((error) => {
+      console.log(error);
+    });
     // Se utiliza setTimeout para evitar que ejecute los condicionales antes que el fs.readfile
     setTimeout(() => {
       if(idEncontrado == false){
@@ -229,58 +198,29 @@ app.patch('/update', (req, res) => {
   }else if(user != undefined || funko != undefined){
     let idEncontrado:boolean = false;
     // Recorre los ficheros del usuario imprimiendo los diferentes funkos de este
-    fs.readdir("Funkos/" + user, function(err,archivos) {
-      if(err){
-        res.status(400);
-          let data = {
-            error: "Error al leer el dir"
-          }
-          res.send(JSON.stringify(data));
-      } else{
-        // Recorrer los archivos
-        archivos.forEach((archivo) =>{
-          fs.readFile("Funkos/" + user + "/" + archivo, (_, data) => {
-            let funkoJson = JSON.parse(data.toString());
-            if(funkoJson._id ==  funko._id){
-              idEncontrado = true;
-              fs.rm("Funkos/" + user + "/" + archivo, (err) => {
-                if(err)
-                  idEncontrado = false;
-
-                
-              });
-              
-            }
-          })
-        });
-    }
-    })
-    // Se utiliza setTimeout para evitar que ejecute los condicionales antes que el fs.readfile
-    setTimeout(() => {
-      if(idEncontrado == false){
-        res.status(400);
-          let data = {
-            error: "Error al eliminar el funko"
-          }
-          res.send(JSON.stringify(data));
+    MongoClient.connect(dbURL).then((client) => {
+      const db = client.db(dbName);
+    
+      return db.collection<FunkoPop>(user.toString()).updateOne({
+        _myid: funko._myid,
+      }, {
+        $set: funko,
+      });
+    }).then((result) => {
+      console.log(result.modifiedCount);
+      if(result.modifiedCount == 1){
+        res.status(200);
+        res.send();
       }else{
-        let RutayNombreFichero:string =  "Funkos/"+ user + "/" + funko._id + ".json"; 
-      
-        fs.writeFile(RutayNombreFichero,  JSON.stringify(funko), (err) => {
-          if(err){
-            res.status(400);
-            let data = {
-              error: "Error al guardar el funko"
-            }
-            res.send(JSON.stringify(data));
-          }else{
-            res.status(200);
-            res.send();
+        res.status(400);
+          let data = {
+            error: "Error al modificar el funko"
           }
-        });
-        
+          res.send(JSON.stringify(data));
       }
-    }, 200);   
+    }).catch((error) => {
+      console.log(error);
+    });
     
   }
 });
